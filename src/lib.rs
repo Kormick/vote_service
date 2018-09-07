@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate exonum;
-// #[macro_use]
 extern crate failure;
 extern crate serde;
 #[macro_use]
@@ -9,7 +8,8 @@ extern crate serde_json;
 
 pub mod schema {
     use exonum::{
-        crypto::PublicKey, storage::{Fork, MapIndex, Snapshot},
+        crypto::PublicKey,
+        storage::{Fork, MapIndex, Snapshot},
     };
 
     encoding_struct! {
@@ -29,7 +29,7 @@ pub mod schema {
 
     #[derive(Debug)]
     pub struct VoteServiceSchema<T> {
-        view: T
+        view: T,
     }
 
     impl<T: AsRef<dyn Snapshot>> VoteServiceSchema<T> {
@@ -54,13 +54,13 @@ pub mod schema {
 }
 
 pub mod transactions {
-	use exonum::crypto::PublicKey;
+    use exonum::crypto::PublicKey;
 
-	use service::SERVICE_ID;
+    use service::SERVICE_ID;
 
-	transactions! {
-		pub VoteTransactions {
-			const SERVICE_ID = SERVICE_ID;
+    transactions! {
+        pub VoteTransactions {
+            const SERVICE_ID = SERVICE_ID;
 
             struct TxCreateCandidate {
                 pub_key: &PublicKey,
@@ -70,34 +70,20 @@ pub mod transactions {
             struct TxAddVote {
                 pub_key: &PublicKey,
             }
-
-   //          // test struct
-			// struct TxVote {
-			// 	pub_key: &PublicKey,
-			// 	name: &str
-			// }
-
-   //          // test struct
-			// struct TxVoteTransfer {
-			// 	rom: &PublicKey,
-   //              to: &PublicKey,
-   //              amount: u64,
-   //              seed: u64
-			// }
-		}
-	}
+        }
+    }
 }
 
 pub mod contracts {
-	use exonum::{
+    use exonum::{
         blockchain::{ExecutionResult, Transaction},
         messages::Message,
-        storage::Fork
+        storage::Fork,
     };
 
     // use errors::Error;
-    use schema::{VoteServiceSchema, Candidate};
-    use transactions::{TxCreateCandidate, TxAddVote};
+    use schema::{Candidate, VoteServiceSchema};
+    use transactions::{TxAddVote, TxCreateCandidate};
 
     impl Transaction for TxCreateCandidate {
         fn verify(&self) -> bool {
@@ -132,11 +118,6 @@ pub mod contracts {
             let mut schema = VoteServiceSchema::new(view);
 
             let candidate = schema.candidate(self.pub_key()).unwrap();
-            // let candidate = match schema.candidate(self.pub_key()) {
-            //     Some(val) => val,
-            //     _ => { println!("TxAddVote::execute: candidate not found"); Ok(()) }
-            // };
-
             let candidate = candidate.add_vote();
             println!("TxAddVote::execute: add vote for {:?}", candidate);
 
@@ -150,13 +131,13 @@ pub mod contracts {
 
 pub mod api {
     use exonum::{
-        api::{self, ServiceApiBuilder, ServiceApiState}, 
+        api::{self, ServiceApiBuilder, ServiceApiState},
         blockchain::Transaction,
-        crypto::{Hash, PublicKey}, 
-        node::TransactionSend
+        crypto::{Hash, PublicKey},
+        node::TransactionSend,
     };
 
-    use schema::{VoteServiceSchema, Candidate};
+    use schema::{Candidate, VoteServiceSchema};
     use transactions::VoteTransactions;
 
     #[derive(Debug, Clone)]
@@ -164,21 +145,22 @@ pub mod api {
 
     #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
     pub struct CandidateQuery {
-        pub pub_key: PublicKey
+        pub pub_key: PublicKey,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct TransactionResponse {
-        /// Hash of the transaction.
-        pub tx_hash: Hash
+        pub tx_hash: Hash,
     }
 
     impl VoteServiceApi {
-        pub fn get_candidate(state: &ServiceApiState, query: CandidateQuery) -> api::Result<Candidate> {
+        pub fn get_candidate(
+            state: &ServiceApiState,
+            query: CandidateQuery,
+        ) -> api::Result<Candidate> {
             println!("VoteServiceApi::get_candidate");
             let snapshot = state.snapshot();
             let schema = VoteServiceSchema::new(snapshot);
-            // TODO add error
             schema
                 .candidate(&query.pub_key)
                 .ok_or_else(|| api::Error::NotFound("Candidate not found".to_string()))
@@ -193,7 +175,10 @@ pub mod api {
             Ok(candidates)
         }
 
-        pub fn post_transaction(state: &ServiceApiState, query: VoteTransactions) -> api::Result<TransactionResponse> {
+        pub fn post_transaction(
+            state: &ServiceApiState,
+            query: VoteTransactions,
+        ) -> api::Result<TransactionResponse> {
             println!("VoteServiceApi::post_transaction");
             let transaction: Box<dyn Transaction> = query.into();
             let tx_hash = transaction.hash();
@@ -228,13 +213,13 @@ pub mod api {
 }
 
 pub mod service {
-	use exonum::{
+    use exonum::{
+        api::ServiceApiBuilder,
         blockchain::{Service, Transaction, TransactionSet},
         crypto::Hash,
-        messages::RawTransaction, 
-        encoding, 
-        storage::Snapshot, 
-        api::ServiceApiBuilder
+        encoding,
+        messages::RawTransaction,
+        storage::Snapshot,
     };
 
     use api::VoteServiceApi;
@@ -246,35 +231,30 @@ pub mod service {
     pub struct VoteService;
 
     impl Service for VoteService {
-    	fn service_name(&self) -> &'static str {
-    		println!("VoteService::service_name");
+        fn service_name(&self) -> &'static str {
+            println!("VoteService::service_name");
             "voteservice"
         }
 
         fn service_id(&self) -> u16 {
-        	// println!("VoteService::service_id");
-        	SERVICE_ID
+            SERVICE_ID
         }
 
-        fn tx_from_raw(&self, raw: RawTransaction) -> Result<Box<dyn Transaction>, encoding::Error> {
-        	// TODO
-
-        	println!("VoteService::tx_from_raw");
-        	let tx = VoteTransactions::tx_from_raw(raw)?;
-        	Ok(tx.into())
+        fn tx_from_raw(
+            &self,
+            raw: RawTransaction,
+        ) -> Result<Box<dyn Transaction>, encoding::Error> {
+            println!("VoteService::tx_from_raw");
+            let tx = VoteTransactions::tx_from_raw(raw)?;
+            Ok(tx.into())
         }
 
         fn state_hash(&self, _: &dyn Snapshot) -> Vec<Hash> {
-        	// TODO
-
-        	// println!("VoteService::state_hash");
-        	vec![]
+            vec![]
         }
 
         fn wire_api(&self, builder: &mut ServiceApiBuilder) {
-        	// TODO
-
-        	println!("VoteService::wire_api");
+            println!("VoteService::wire_api");
             VoteServiceApi::wire(builder);
         }
     }
