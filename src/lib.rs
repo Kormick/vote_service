@@ -20,10 +20,10 @@ pub mod schema {
         }
     }
 
-    impl Candidate {
-        pub fn add_vote(self) -> Self {
-            let new_votes = self.votes() + 1;
-            Self::new(self.pub_key(), self.name(), new_votes)
+    encoding_struct! {
+        struct Voter {
+            pub_key: &PublicKey,
+            name: &str,
         }
     }
 
@@ -44,12 +44,25 @@ pub mod schema {
         pub fn candidate(&self, pub_key: &PublicKey) -> Option<Candidate> {
             self.candidates().get(pub_key)
         }
+
+        pub fn voters(&self) -> MapIndex<&dyn Snapshot, PublicKey, Voter> {
+            MapIndex::new("voteservice.voters", self.view.as_ref())
+        }
+
+        pub fn voter(&self, pub_key: &PublicKey) -> Option<Voter> {
+            self.voters().get(pub_key)
+        }
     }
 
     impl<'a> VoteServiceSchema<&'a mut Fork> {
         pub fn candidates_mut(&mut self) -> MapIndex<&mut Fork, PublicKey, Candidate> {
             MapIndex::new("voteservice.candidates", &mut self.view)
         }
+
+        pub fn voters_mut(&mut self) -> MapIndex<&mut Fork, PublicKey, Voter> {
+            MapIndex::new("voteservice.voters", &mut self.view)
+        }
+
     }
 }
 
@@ -68,8 +81,9 @@ pub mod transactions {
                 info: &str,
             }
 
-            struct TxAddVote {
+            struct TxCreateVoter {
                 pub_key: &PublicKey,
+                name: &str,
             }
         }
     }
@@ -83,8 +97,8 @@ pub mod contracts {
     };
 
     // use errors::Error;
-    use schema::{Candidate, VoteServiceSchema};
-    use transactions::{TxAddVote, TxCreateCandidate};
+    use schema::{Candidate, VoteServiceSchema, Voter};
+    use transactions::{TxAddVote, TxCreateCandidate, TxCreateVoter};
 
     impl Transaction for TxCreateCandidate {
         fn verify(&self) -> bool {
@@ -105,6 +119,27 @@ pub mod contracts {
             } else {
                 // TODO error
                 println!("TxCreateCandidate::execute: candidate already exists");
+                Ok(())
+            }
+        }
+    }
+
+    impl Transaction for TxCreateVoter {
+        fn verify(&self) -> bool {
+            // self.verify_signature(self.pub_key())
+            true // FIXME
+        }
+
+        fn execute(&self, view: &mut Fork) -> ExecutionResult {
+            let mut schema = VoteServiceSchema::new(view);
+            if schema.voter(self.pub_key()).is_none() {
+                let voter = Voter::new(self.pub_key(), self.name());
+                println!("TxCreateVoter::execute: Create the voter: {:?}", voter);
+                schema.voters_mut().put(self.pub_key(), voter);
+                Ok(())
+            } else {
+                // TODO error
+                println!("TxCreateVoter::execute: Voter already exists");
                 Ok(())
             }
         }
@@ -139,7 +174,7 @@ pub mod api {
         node::TransactionSend,
     };
 
-    use schema::{Candidate, VoteServiceSchema};
+    use schema::{Candidate, VoteServiceSchema, Voter};
     use transactions::VoteTransactions;
 
     #[derive(Debug, Clone)]
@@ -147,6 +182,11 @@ pub mod api {
 
     #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
     pub struct CandidateQuery {
+        pub pub_key: PublicKey,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+    pub struct VoterQuery {
         pub pub_key: PublicKey,
     }
 
@@ -175,6 +215,22 @@ pub mod api {
             Ok(candidates)
         }
 
+        pub fn get_voter(state: &ServiceApiState, query: VoterQuery) -> api::Result<Voter> {
+            let snapshot = state.snapshot();
+            let schema = VoteServiceSchema::new(snapshot);
+            schema
+                .voter(&query.pub_key)
+                .ok_or_else(|| api::Error::NotFound("Voter not found".to_string()))
+        }
+
+        pub fn get_voters(state: &ServiceApiState, _query: ()) -> api::Result<Vec<Voter>> {
+            let snapshot = state.snapshot();
+            let schema = VoteServiceSchema::new(snapshot);
+            let idx = schema.voters();
+            let voters = idx.values().collect();
+            Ok(voters)
+        }
+
         pub fn post_transaction(
             state: &ServiceApiState,
             query: VoteTransactions,
@@ -198,8 +254,10 @@ pub mod api {
                 .endpoint("v1/foo42", Self::foo42) // test function
                 .endpoint("v1/candidate", Self::get_candidate)
                 .endpoint("v1/candidates", Self::get_candidates)
+                .endpoint("v1/voter", Self::get_voter)
+                .endpoint("v1/voters", Self::get_voters)
                 .endpoint_mut("v1/candidates", Self::post_transaction)
-                .endpoint_mut("v1/candidates/vote", Self::post_transaction);
+                .endpoint_mut("v1/voters", Self::post_transaction)
         }
     }
 }
