@@ -16,7 +16,7 @@ pub mod schema {
         struct Candidate {
             pub_key: &PublicKey,
             name: &str,
-            votes: u64
+            info: &str,
         }
     }
 
@@ -65,6 +65,7 @@ pub mod transactions {
             struct TxCreateCandidate {
                 pub_key: &PublicKey,
                 name: &str,
+                info: &str,
             }
 
             struct TxAddVote {
@@ -94,8 +95,11 @@ pub mod contracts {
         fn execute(&self, view: &mut Fork) -> ExecutionResult {
             let mut schema = VoteServiceSchema::new(view);
             if schema.candidate(self.pub_key()).is_none() {
-                let candidate = Candidate::new(self.pub_key(), self.name(), 0);
-                println!("Create the candidate: {:?}", candidate);
+                let candidate = Candidate::new(self.pub_key(), self.name(), self.info());
+                println!(
+                    "TxCreateCandidate::execute: Create the candidate: {:?}",
+                    candidate
+                );
                 schema.candidates_mut().put(self.pub_key(), candidate);
                 Ok(())
             } else {
