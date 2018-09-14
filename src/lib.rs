@@ -446,6 +446,25 @@ pub mod service {
     }
 }
 
+pub mod factory {
+    use exonum::blockchain;
+    use exonum::helpers::fabric;
+    use service::VoteService;
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct ServiceFactory;
+
+    impl fabric::ServiceFactory for ServiceFactory {
+        fn service_name(&self) -> &str {
+            "voteservice"
+        }
+
+        fn make_service(&mut self, _: &fabric::Context) -> Box<dyn blockchain::Service> {
+            Box::new(VoteService)
+        }
+    }
+}
+
 // #[cfg(test)]
 // mod tests {
 //     #[test]
