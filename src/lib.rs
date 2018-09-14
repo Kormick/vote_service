@@ -241,8 +241,9 @@ pub mod contracts {
 pub mod api {
     use exonum::{
         api::{self, ServiceApiBuilder, ServiceApiState},
-        blockchain::Transaction,
+        blockchain::{Schema, Transaction},
         crypto::{Hash, PublicKey},
+        messages::Message,
         node::TransactionSend,
     };
 
@@ -264,6 +265,11 @@ pub mod api {
 
     #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
     pub struct VoteQuery {
+        pub pub_key: PublicKey,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+    pub struct BlockQuery {
         pub pub_key: PublicKey,
     }
 
@@ -351,6 +357,27 @@ pub mod api {
             Ok(42)
         }
 
+        pub fn get_block(state: &ServiceApiState, query: BlockQuery) -> api::Result<u64> {
+            println!("VoteServiceApi::get_block");
+            let snapshot = state.snapshot();
+            let ex_schema = Schema::new(snapshot);
+
+            let transactions = ex_schema.transactions();
+            for raw_mes in transactions.values() {
+                let parsed = TxAddVote::from_raw(raw_mes.clone());
+                if parsed.is_ok() {
+                    let mes = parsed.unwrap();
+                    if mes.voter_id().clone() == query.pub_key {
+                        let locations = ex_schema.transactions_locations();
+                        let loc = locations.get(&raw_mes.hash()).unwrap();
+                        return Ok(loc.block_height().0);
+                    }
+                }
+            }
+
+            Ok(43) // FIXME
+        }
+
         pub fn wire(builder: &mut ServiceApiBuilder) {
             println!("VoteServiceApi::wire");
             builder
@@ -363,6 +390,7 @@ pub mod api {
                 .endpoint("v1/vote", Self::get_vote)
                 .endpoint("v1/votes", Self::get_votes)
                 .endpoint("v1/results", Self::get_results)
+                .endpoint("v1/block", Self::get_block)
                 .endpoint_mut("v1/candidates", Self::post_transaction)
                 .endpoint_mut("v1/voters", Self::post_transaction)
                 .endpoint_mut("v1/votes", Self::post_transaction);
