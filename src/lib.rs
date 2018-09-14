@@ -146,7 +146,7 @@ pub mod contracts {
     impl Transaction for TxCreateCandidate {
         fn verify(&self) -> bool {
             // self.verify_signature(self.pub_key())
-            self.verify_signature(self.pub_key())
+            true // FIXME
         }
 
         fn execute(&self, view: &mut Fork) -> ExecutionResult {
