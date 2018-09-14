@@ -34,6 +34,14 @@ pub mod schema {
         }
     }
 
+    encoding_struct! {
+        struct CandidateResult {
+            candidate: &PublicKey,
+            votes: u64,
+            voters: Vec<Voter>,
+        }
+    }
+
     #[derive(Debug)]
     pub struct VoteServiceSchema<T> {
         view: T,
@@ -67,6 +75,14 @@ pub mod schema {
         pub fn vote(&self, pub_key: &PublicKey) -> Option<Vote> {
             self.votes().get(pub_key)
         }
+
+        pub fn vote_results(&self) -> MapIndex<&dyn Snapshot, PublicKey, CandidateResult> {
+            MapIndex::new("voteservice.results", self.view.as_ref())
+        }
+
+        pub fn candidate_result(&self, pub_key: &PublicKey) -> Option<CandidateResult> {
+            self.vote_results().get(pub_key)
+        }
     }
 
     impl<'a> VoteServiceSchema<&'a mut Fork> {
@@ -80,6 +96,10 @@ pub mod schema {
 
         pub fn votes_mut(&mut self) -> MapIndex<&mut Fork, PublicKey, Vote> {
             MapIndex::new("voteservice.votes", &mut self.view)
+        }
+
+        pub fn vote_results_mut(&mut self) -> MapIndex<&mut Fork, PublicKey, CandidateResult> {
+            MapIndex::new("voteservice.results", &mut self.view)
         }
     }
 }
@@ -120,7 +140,7 @@ pub mod contracts {
     };
 
     // use errors::Error;
-    use schema::{Candidate, Vote, VoteServiceSchema, Voter};
+    use schema::{Candidate, CandidateResult, Vote, VoteServiceSchema, Voter};
     use transactions::{TxAddVote, TxCreateCandidate, TxCreateVoter};
 
     impl Transaction for TxCreateCandidate {
@@ -138,6 +158,14 @@ pub mod contracts {
                     candidate
                 );
                 schema.candidates_mut().put(self.pub_key(), candidate);
+
+                let candidate_res = CandidateResult::new(self.pub_key(), 0, vec![]);
+                println!(
+                    "TxCreateCandidate::execute: Create Candidate result: {:?}",
+                    candidate_res
+                );
+                schema.vote_results_mut().put(self.pub_key(), candidate_res);
+
                 Ok(())
             } else {
                 // TODO error
@@ -194,6 +222,12 @@ pub mod contracts {
                 println!("TxAddVote::execute: Add vote {:?}", vote);
                 schema.votes_mut().put(self.voter_id(), vote);
 
+                let result = schema.candidate_result(self.candidate_id()).unwrap();
+                let mut voters = result.voters();
+                voters.push(schema.voter(self.voter_id()).unwrap());
+                let result = CandidateResult::new(result.candidate(), result.votes() + 1, voters);
+                schema.vote_results_mut().put(self.candidate_id(), result);
+
                 Ok(())
             } else {
                 // TODO error
@@ -212,7 +246,7 @@ pub mod api {
         node::TransactionSend,
     };
 
-    use schema::{Candidate, Vote, VoteServiceSchema, Voter};
+    use schema::{Candidate, CandidateResult, Vote, VoteServiceSchema, Voter};
     use transactions::{TxAddVote, VoteTransactions};
 
     #[derive(Debug, Clone)]
@@ -290,6 +324,17 @@ pub mod api {
             Ok(votes)
         }
 
+        pub fn get_results(
+            state: &ServiceApiState,
+            _query: (),
+        ) -> api::Result<Vec<CandidateResult>> {
+            let snapshot = state.snapshot();
+            let schema = VoteServiceSchema::new(snapshot);
+            let idx = schema.vote_results();
+            let results = idx.values().collect();
+            Ok(results)
+        }
+
         pub fn post_transaction(
             state: &ServiceApiState,
             query: VoteTransactions,
@@ -317,6 +362,7 @@ pub mod api {
                 .endpoint("v1/voters", Self::get_voters)
                 .endpoint("v1/vote", Self::get_vote)
                 .endpoint("v1/votes", Self::get_votes)
+                .endpoint("v1/results", Self::get_results)
                 .endpoint_mut("v1/candidates", Self::post_transaction)
                 .endpoint_mut("v1/voters", Self::post_transaction)
                 .endpoint_mut("v1/votes", Self::post_transaction);
