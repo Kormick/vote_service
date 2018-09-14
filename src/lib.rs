@@ -87,12 +87,11 @@ pub mod contracts {
 
     impl Transaction for TxCreateCandidate {
         fn verify(&self) -> bool {
-            println!("TxCreateCandidate::verify");
+            // self.verify_signature(self.pub_key())
             self.verify_signature(self.pub_key())
         }
 
         fn execute(&self, view: &mut Fork) -> ExecutionResult {
-            println!("TxCreateCandidate::execute");
             let mut schema = VoteServiceSchema::new(view);
             if schema.candidate(self.pub_key()).is_none() {
                 let candidate = Candidate::new(self.pub_key(), self.name(), 0);
@@ -109,12 +108,11 @@ pub mod contracts {
 
     impl Transaction for TxAddVote {
         fn verify(&self) -> bool {
-            println!("TxAddVote::verify");
+            // self.verify_signature(self.pub_key());
             self.verify_signature(self.pub_key())
         }
 
         fn execute(&self, view: &mut Fork) -> ExecutionResult {
-            println!("TxAddVote::execute");
             let mut schema = VoteServiceSchema::new(view);
 
             let candidate = schema.candidate(self.pub_key()).unwrap();
@@ -158,7 +156,6 @@ pub mod api {
             state: &ServiceApiState,
             query: CandidateQuery,
         ) -> api::Result<Candidate> {
-            println!("VoteServiceApi::get_candidate");
             let snapshot = state.snapshot();
             let schema = VoteServiceSchema::new(snapshot);
             schema
@@ -167,7 +164,6 @@ pub mod api {
         }
 
         pub fn get_candidates(state: &ServiceApiState, _query: ()) -> api::Result<Vec<Candidate>> {
-            println!("VoteServiceApi::get_candidates");
             let snapshot = state.snapshot();
             let schema = VoteServiceSchema::new(snapshot);
             let idx = schema.candidates();
@@ -187,14 +183,7 @@ pub mod api {
         }
 
         // test api function
-        pub fn foo0(_state: &ServiceApiState, _query: ()) -> api::Result<u32> {
-            println!("VoteServiceApi::foo0");
-            Ok(0)
-        }
-
-        // test api function
         pub fn foo42(_state: &ServiceApiState, _query: ()) -> api::Result<u32> {
-            println!("VoteServiceApi::foo42");
             Ok(42)
         }
 
@@ -202,7 +191,6 @@ pub mod api {
             println!("VoteServiceApi::wire");
             builder
                 .public_scope()
-                .endpoint("v1/foo0", Self::foo0) // test function
                 .endpoint("v1/foo42", Self::foo42) // test function
                 .endpoint("v1/candidate", Self::get_candidate)
                 .endpoint("v1/candidates", Self::get_candidates)
