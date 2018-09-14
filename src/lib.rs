@@ -27,6 +27,13 @@ pub mod schema {
         }
     }
 
+    encoding_struct! {
+        struct Vote {
+            from: &PublicKey,
+            to: &PublicKey,
+        }
+    }
+
     #[derive(Debug)]
     pub struct VoteServiceSchema<T> {
         view: T,
@@ -52,6 +59,14 @@ pub mod schema {
         pub fn voter(&self, pub_key: &PublicKey) -> Option<Voter> {
             self.voters().get(pub_key)
         }
+
+        pub fn votes(&self) -> MapIndex<&dyn Snapshot, PublicKey, Vote> {
+            MapIndex::new("voteservice.votes", self.view.as_ref())
+        }
+
+        pub fn vote(&self, pub_key: &PublicKey) -> Option<Vote> {
+            self.votes().get(pub_key)
+        }
     }
 
     impl<'a> VoteServiceSchema<&'a mut Fork> {
@@ -63,6 +78,9 @@ pub mod schema {
             MapIndex::new("voteservice.voters", &mut self.view)
         }
 
+        pub fn votes_mut(&mut self) -> MapIndex<&mut Fork, PublicKey, Vote> {
+            MapIndex::new("voteservice.votes", &mut self.view)
+        }
     }
 }
 
@@ -85,6 +103,11 @@ pub mod transactions {
                 pub_key: &PublicKey,
                 name: &str,
             }
+
+            struct TxAddVote {
+                voter_id: &PublicKey,
+                candidate_id: &PublicKey,
+            }
         }
     }
 }
@@ -97,7 +120,7 @@ pub mod contracts {
     };
 
     // use errors::Error;
-    use schema::{Candidate, VoteServiceSchema, Voter};
+    use schema::{Candidate, Vote, VoteServiceSchema, Voter};
     use transactions::{TxAddVote, TxCreateCandidate, TxCreateVoter};
 
     impl Transaction for TxCreateCandidate {
@@ -148,20 +171,35 @@ pub mod contracts {
     impl Transaction for TxAddVote {
         fn verify(&self) -> bool {
             // self.verify_signature(self.pub_key());
-            self.verify_signature(self.pub_key())
+            true // FIXME
         }
 
         fn execute(&self, view: &mut Fork) -> ExecutionResult {
             let mut schema = VoteServiceSchema::new(view);
 
-            let candidate = schema.candidate(self.pub_key()).unwrap();
-            let candidate = candidate.add_vote();
-            println!("TxAddVote::execute: add vote for {:?}", candidate);
+            if schema.candidate(self.candidate_id()).is_none() {
+                // TODO error
+                println!("TxAddVote::execute: Candidate not found");
+                return Ok(());
+            }
 
-            let mut candidates = schema.candidates_mut();
-            candidates.put(self.pub_key(), candidate);
+            if schema.voter(self.voter_id()).is_none() {
+                // TODO error
+                println!("TxAddVote::execute: Voter not found");
+                return Ok(());
+            }
 
-            Ok(())
+            if schema.vote(self.voter_id()).is_none() {
+                let vote = Vote::new(self.voter_id(), self.candidate_id());
+                println!("TxAddVote::execute: Add vote {:?}", vote);
+                schema.votes_mut().put(self.voter_id(), vote);
+
+                Ok(())
+            } else {
+                // TODO error
+                println!("TxAddVote::execute: vote already exists");
+                Ok(())
+            }
         }
     }
 }
@@ -174,8 +212,8 @@ pub mod api {
         node::TransactionSend,
     };
 
-    use schema::{Candidate, VoteServiceSchema, Voter};
-    use transactions::VoteTransactions;
+    use schema::{Candidate, Vote, VoteServiceSchema, Voter};
+    use transactions::{TxAddVote, VoteTransactions};
 
     #[derive(Debug, Clone)]
     pub struct VoteServiceApi;
@@ -187,6 +225,11 @@ pub mod api {
 
     #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
     pub struct VoterQuery {
+        pub pub_key: PublicKey,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+    pub struct VoteQuery {
         pub pub_key: PublicKey,
     }
 
@@ -231,6 +274,22 @@ pub mod api {
             Ok(voters)
         }
 
+        pub fn get_vote(state: &ServiceApiState, query: VoteQuery) -> api::Result<Vote> {
+            let snapshot = state.snapshot();
+            let schema = VoteServiceSchema::new(snapshot);
+            schema
+                .vote(&query.pub_key)
+                .ok_or_else(|| api::Error::NotFound("Vote not found".to_string()))
+        }
+
+        pub fn get_votes(state: &ServiceApiState, _query: ()) -> api::Result<Vec<Vote>> {
+            let snapshot = state.snapshot();
+            let schema = VoteServiceSchema::new(snapshot);
+            let idx = schema.votes();
+            let votes = idx.values().collect();
+            Ok(votes)
+        }
+
         pub fn post_transaction(
             state: &ServiceApiState,
             query: VoteTransactions,
@@ -256,8 +315,11 @@ pub mod api {
                 .endpoint("v1/candidates", Self::get_candidates)
                 .endpoint("v1/voter", Self::get_voter)
                 .endpoint("v1/voters", Self::get_voters)
+                .endpoint("v1/vote", Self::get_vote)
+                .endpoint("v1/votes", Self::get_votes)
                 .endpoint_mut("v1/candidates", Self::post_transaction)
                 .endpoint_mut("v1/voters", Self::post_transaction)
+                .endpoint_mut("v1/votes", Self::post_transaction);
         }
     }
 }
