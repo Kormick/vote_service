@@ -1,10 +1,10 @@
+use cipher;
+use errors::Error;
 use exonum::{
     blockchain::{ExecutionResult, Transaction},
-    messages::Message,
+    crypto::CryptoHash,
     storage::Fork,
 };
-
-// use errors::Error;
 use schema::{Candidate, CandidateResult, Vote, VoteServiceSchema, Voter};
 use transactions::{TxAddVote, TxCreateCandidate, TxCreateVoter};
 
@@ -24,7 +24,7 @@ impl Transaction for TxCreateCandidate {
             );
             schema.candidates_mut().put(self.pub_key(), candidate);
 
-            let candidate_res = CandidateResult::new(self.pub_key(), 0, vec![]);
+            let candidate_res = CandidateResult::new(self.pub_key(), vec![], 0);
             println!(
                 "TxCreateCandidate::execute: Create Candidate result: {:?}",
                 candidate_res
@@ -33,9 +33,7 @@ impl Transaction for TxCreateCandidate {
 
             Ok(())
         } else {
-            // TODO error
-            println!("TxCreateCandidate::execute: candidate already exists");
-            Ok(())
+            Err(Error::CandidateAlreadyExists)?
         }
     }
 }
@@ -54,9 +52,7 @@ impl Transaction for TxCreateVoter {
             schema.voters_mut().put(self.pub_key(), voter);
             Ok(())
         } else {
-            // TODO error
-            println!("TxCreateVoter::execute: Voter already exists");
-            Ok(())
+            Err(Error::VoterAlreadyExists)?
         }
     }
 }
@@ -71,33 +67,32 @@ impl Transaction for TxAddVote {
         let mut schema = VoteServiceSchema::new(view);
 
         if schema.candidate(self.candidate_id()).is_none() {
-            // TODO error
-            println!("TxAddVote::execute: Candidate not found");
-            return Ok(());
+            Err(Error::CandidateNotFound)?
         }
 
         if schema.voter(self.voter_id()).is_none() {
-            // TODO error
-            println!("TxAddVote::execute: Voter not found");
-            return Ok(());
+            Err(Error::VoterNotFound)?
         }
 
-        if schema.vote(self.voter_id()).is_none() {
+        let voter_hash = self.voter_id().hash();
+        if schema.vote(&voter_hash).is_none() {
             let vote = Vote::new(self.voter_id(), self.candidate_id());
-            println!("TxAddVote::execute: Add vote {:?}", vote);
-            schema.votes_mut().put(self.voter_id(), vote);
+            let enc_vote = cipher::encrypt_vote(&vote);
+            println!("TxAddVote::execute: Add encrypted vote {:?}", enc_vote);
+            schema.votes_mut().put(&voter_hash, enc_vote.clone());
 
-            let result = schema.candidate_result(self.candidate_id()).unwrap();
-            let mut voters = result.voters();
-            voters.push(schema.voter(self.voter_id()).unwrap());
-            let result = CandidateResult::new(result.candidate(), result.votes() + 1, voters);
+            let result = match schema.candidate_result(self.candidate_id()) {
+                Some(res) => res,
+                None => Err(Error::CandidateResultNotFound)?,
+            };
+            let mut votes = result.votes();
+            votes.push(enc_vote);
+            let votes_num = votes.len() as u64;
+            let result = CandidateResult::new(self.candidate_id(), votes, votes_num);
             schema.vote_results_mut().put(self.candidate_id(), result);
-
             Ok(())
         } else {
-            // TODO error
-            println!("TxAddVote::execute: vote already exists");
-            Ok(())
+            Err(Error::VoteAlreadyExists)?
         }
     }
 }

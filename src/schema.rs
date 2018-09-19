@@ -1,5 +1,5 @@
 use exonum::{
-    crypto::PublicKey,
+    crypto::{Hash, PublicKey},
     storage::{Fork, MapIndex, Snapshot},
 };
 
@@ -26,10 +26,31 @@ encoding_struct! {
 }
 
 encoding_struct! {
+    struct EncryptedVote {
+        data: Vec<u8>,
+    }
+}
+
+encoding_struct! {
+    struct DecryptedCandidateResult {
+        candidate: &PublicKey,
+        votes: Vec<Vote>,
+        vote_num: u64
+    }
+}
+
+encoding_struct! {
     struct CandidateResult {
         candidate: &PublicKey,
-        votes: u64,
-        voters: Vec<Voter>,
+        votes: Vec<EncryptedVote>,
+        vote_num: u64
+    }
+}
+
+encoding_struct! {
+    struct VoteResult {
+        pub_key: &PublicKey,
+        candidate_results: Vec<CandidateResult>,
     }
 }
 
@@ -59,12 +80,12 @@ impl<T: AsRef<dyn Snapshot>> VoteServiceSchema<T> {
         self.voters().get(pub_key)
     }
 
-    pub fn votes(&self) -> MapIndex<&dyn Snapshot, PublicKey, Vote> {
+    pub fn votes(&self) -> MapIndex<&dyn Snapshot, Hash, EncryptedVote> {
         MapIndex::new("voteservice.votes", self.view.as_ref())
     }
 
-    pub fn vote(&self, pub_key: &PublicKey) -> Option<Vote> {
-        self.votes().get(pub_key)
+    pub fn vote(&self, hash: &Hash) -> Option<EncryptedVote> {
+        self.votes().get(hash)
     }
 
     pub fn vote_results(&self) -> MapIndex<&dyn Snapshot, PublicKey, CandidateResult> {
@@ -85,7 +106,7 @@ impl<'a> VoteServiceSchema<&'a mut Fork> {
         MapIndex::new("voteservice.voters", &mut self.view)
     }
 
-    pub fn votes_mut(&mut self) -> MapIndex<&mut Fork, PublicKey, Vote> {
+    pub fn votes_mut(&mut self) -> MapIndex<&mut Fork, Hash, EncryptedVote> {
         MapIndex::new("voteservice.votes", &mut self.view)
     }
 

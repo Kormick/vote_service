@@ -1,3 +1,5 @@
+use agreement;
+use cipher;
 use exonum::{
     api::{self, ServiceApiBuilder, ServiceApiState},
     blockchain::{Schema, Transaction},
@@ -5,8 +7,10 @@ use exonum::{
     messages::Message,
     node::TransactionSend,
 };
-
-use schema::{Candidate, CandidateResult, Vote, VoteServiceSchema, Voter};
+use schema::{
+    Candidate, CandidateResult, DecryptedCandidateResult, EncryptedVote, VoteResult,
+    VoteServiceSchema, Voter,
+};
 use transactions::{TxAddVote, VoteTransactions};
 
 #[derive(Debug, Clone)]
@@ -19,11 +23,6 @@ pub struct CandidateQuery {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct VoterQuery {
-    pub pub_key: PublicKey,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct VoteQuery {
     pub pub_key: PublicKey,
 }
 
@@ -70,15 +69,7 @@ impl VoteServiceApi {
         Ok(voters)
     }
 
-    pub fn get_vote(state: &ServiceApiState, query: VoteQuery) -> api::Result<Vote> {
-        let snapshot = state.snapshot();
-        let schema = VoteServiceSchema::new(snapshot);
-        schema
-            .vote(&query.pub_key)
-            .ok_or_else(|| api::Error::NotFound("Vote not found".to_string()))
-    }
-
-    pub fn get_votes(state: &ServiceApiState, _query: ()) -> api::Result<Vec<Vote>> {
+    pub fn get_votes(state: &ServiceApiState, _query: ()) -> api::Result<Vec<EncryptedVote>> {
         let snapshot = state.snapshot();
         let schema = VoteServiceSchema::new(snapshot);
         let idx = schema.votes();
@@ -86,32 +77,60 @@ impl VoteServiceApi {
         Ok(votes)
     }
 
-    pub fn get_results(state: &ServiceApiState, _query: ()) -> api::Result<Vec<CandidateResult>> {
+    pub fn get_results(state: &ServiceApiState, _query: ()) -> api::Result<VoteResult> {
+        let service_public_key = agreement::get_ephemeral().public_out_key;
+        let service_public_key = match PublicKey::from_slice(&service_public_key) {
+            Some(val) => val,
+            None => panic!("api::get_results: failed to get ephemeral key"),
+        };
+
         let snapshot = state.snapshot();
         let schema = VoteServiceSchema::new(snapshot);
         let idx = schema.vote_results();
-        let results = idx.values().collect();
+        let candidates = idx.values().collect();
+        let results = VoteResult::new(&service_public_key, candidates);
+
         Ok(results)
+    }
+
+    pub fn get_results_decrypted(
+        state: &ServiceApiState,
+        _query: (),
+    ) -> api::Result<Vec<DecryptedCandidateResult>> {
+        let snapshot = state.snapshot();
+        let schema = VoteServiceSchema::new(snapshot);
+        let idx = schema.vote_results();
+        let results: Vec<CandidateResult> = idx.values().collect();
+
+        let mut dec_results = vec![];
+        for res in results.iter() {
+            let mut dec_res_votes = vec![];
+
+            for vote in res.votes().iter() {
+                let dec_vote = cipher::decrypt_vote(vote);
+                dec_res_votes.push(dec_vote);
+            }
+
+            let votes_num = dec_res_votes.len() as u64;
+            let mut dec_res =
+                DecryptedCandidateResult::new(res.candidate(), dec_res_votes, votes_num);
+            dec_results.push(dec_res);
+        }
+
+        Ok(dec_results)
     }
 
     pub fn post_transaction(
         state: &ServiceApiState,
         query: VoteTransactions,
     ) -> api::Result<TransactionResponse> {
-        println!("VoteServiceApi::post_transaction");
         let transaction: Box<dyn Transaction> = query.into();
         let tx_hash = transaction.hash();
         state.sender().send(transaction)?;
         Ok(TransactionResponse { tx_hash })
     }
 
-    // test api function
-    pub fn foo42(_state: &ServiceApiState, _query: ()) -> api::Result<u32> {
-        Ok(42)
-    }
-
     pub fn get_block(state: &ServiceApiState, query: BlockQuery) -> api::Result<u64> {
-        println!("VoteServiceApi::get_block");
         let snapshot = state.snapshot();
         let ex_schema = Schema::new(snapshot);
 
@@ -128,24 +147,22 @@ impl VoteServiceApi {
             }
         }
 
-        Ok(43) // FIXME
+        Err(api::Error::NotFound("Block not found".to_string()))
     }
 
     pub fn wire(builder: &mut ServiceApiBuilder) {
-        println!("VoteServiceApi::wire");
         builder
-                .public_scope()
-                .endpoint("v1/foo42", Self::foo42) // test function
-                .endpoint("v1/candidate", Self::get_candidate)
-                .endpoint("v1/candidates", Self::get_candidates)
-                .endpoint("v1/voter", Self::get_voter)
-                .endpoint("v1/voters", Self::get_voters)
-                .endpoint("v1/vote", Self::get_vote)
-                .endpoint("v1/votes", Self::get_votes)
-                .endpoint("v1/results", Self::get_results)
-                .endpoint("v1/block", Self::get_block)
-                .endpoint_mut("v1/candidates", Self::post_transaction)
-                .endpoint_mut("v1/voters", Self::post_transaction)
-                .endpoint_mut("v1/votes", Self::post_transaction);
+            .public_scope()
+            .endpoint("v1/candidate", Self::get_candidate)
+            .endpoint("v1/candidates", Self::get_candidates)
+            .endpoint("v1/voter", Self::get_voter)
+            .endpoint("v1/voters", Self::get_voters)
+            .endpoint("v1/votes", Self::get_votes)
+            .endpoint("v1/results", Self::get_results)
+            .endpoint("v1/results_dec", Self::get_results_decrypted)
+            .endpoint("v1/block", Self::get_block)
+            .endpoint_mut("v1/candidates", Self::post_transaction)
+            .endpoint_mut("v1/voters", Self::post_transaction)
+            .endpoint_mut("v1/votes", Self::post_transaction);
     }
 }

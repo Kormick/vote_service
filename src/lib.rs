@@ -1,87 +1,116 @@
 #[macro_use]
 extern crate exonum;
+#[macro_use]
 extern crate failure;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate byteorder;
+extern crate ring;
 extern crate serde_json;
+#[macro_use]
+extern crate lazy_static;
+extern crate untrusted;
 
+pub mod agreement;
 pub mod api;
+pub mod cipher;
+pub mod config;
 pub mod contracts;
+pub mod errors;
 pub mod schema;
 pub mod transactions;
 
-pub mod service {
-    use exonum::{
-        api::ServiceApiBuilder,
-        blockchain::{Service, Transaction, TransactionSet},
-        crypto::Hash,
-        encoding,
-        messages::RawTransaction,
-        storage::Snapshot,
-    };
+use api::VoteServiceApi;
+use config::VoteServiceConfig;
+use exonum::encoding::serialize::json::reexport::Value;
+use exonum::{
+    api::ServiceApiBuilder,
+    blockchain::{Service, Transaction, TransactionSet},
+    crypto::Hash,
+    encoding,
+    messages::RawTransaction,
+    storage::{Fork, Snapshot},
+};
+use serde_json::to_value;
+use transactions::VoteTransactions;
 
-    use api::VoteServiceApi;
-    use transactions::VoteTransactions;
+pub const SERVICE_ID: u16 = 42;
 
-    pub const SERVICE_ID: u16 = 42;
+#[derive(Debug, Default)]
+pub struct VoteService {
+    config: VoteServiceConfig,
+}
 
-    #[derive(Debug)]
-    pub struct VoteService;
+impl Service for VoteService {
+    fn service_name(&self) -> &'static str {
+        "voteservice"
+    }
 
-    impl Service for VoteService {
-        fn service_name(&self) -> &'static str {
-            println!("VoteService::service_name");
-            "voteservice"
-        }
+    fn service_id(&self) -> u16 {
+        SERVICE_ID
+    }
 
-        fn service_id(&self) -> u16 {
-            SERVICE_ID
-        }
+    fn tx_from_raw(&self, raw: RawTransaction) -> Result<Box<dyn Transaction>, encoding::Error> {
+        let tx = VoteTransactions::tx_from_raw(raw)?;
+        Ok(tx.into())
+    }
 
-        fn tx_from_raw(
-            &self,
-            raw: RawTransaction,
-        ) -> Result<Box<dyn Transaction>, encoding::Error> {
-            println!("VoteService::tx_from_raw");
-            let tx = VoteTransactions::tx_from_raw(raw)?;
-            Ok(tx.into())
-        }
+    fn state_hash(&self, _: &dyn Snapshot) -> Vec<Hash> {
+        vec![]
+    }
 
-        fn state_hash(&self, _: &dyn Snapshot) -> Vec<Hash> {
-            vec![]
-        }
+    fn wire_api(&self, builder: &mut ServiceApiBuilder) {
+        VoteServiceApi::wire(builder);
+    }
 
-        fn wire_api(&self, builder: &mut ServiceApiBuilder) {
-            println!("VoteService::wire_api");
-            VoteServiceApi::wire(builder);
-        }
+    fn initialize(&self, _fork: &mut Fork) -> Value {
+        to_value(self.config.clone()).unwrap()
     }
 }
 
-pub mod factory {
-    use exonum::blockchain;
-    use exonum::helpers::fabric;
-    use service::VoteService;
+use exonum::blockchain;
+use exonum::helpers::fabric::{self, keys};
 
-    #[derive(Debug, Clone, Copy)]
-    pub struct ServiceFactory;
+#[derive(Debug, Clone, Copy)]
+pub struct ServiceFactory;
 
-    impl fabric::ServiceFactory for ServiceFactory {
-        fn service_name(&self) -> &str {
-            "voteservice"
-        }
+impl fabric::ServiceFactory for ServiceFactory {
+    fn service_name(&self) -> &str {
+        "voteservice"
+    }
 
-        fn make_service(&mut self, _: &fabric::Context) -> Box<dyn blockchain::Service> {
-            Box::new(VoteService)
-        }
+    fn make_service(&mut self, context: &fabric::Context) -> Box<dyn blockchain::Service> {
+        let service_config: VoteServiceConfig =
+            context.get(keys::NODE_CONFIG).unwrap().services_configs["voteservice_service"]
+                .clone()
+                .try_into()
+                .unwrap();
+
+        let author_key = service_config.author_public_key.unwrap();
+        let author_key = author_key.as_ref();
+        agreement::init_ephemeral(author_key);
+
+        Box::new(VoteService {
+            config: service_config,
+        })
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     #[test]
-//     fn it_works() {
-//         assert_eq!(2 + 2, 4);
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use exonum::blockchain::Service;
+
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
+
+    use service;
+    #[test]
+    fn service_name() {
+        let service = service::VoteService;
+        let name = service.service_name();
+        assert_eq!("voteservice", name);
+    }
+}

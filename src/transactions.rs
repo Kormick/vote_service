@@ -1,10 +1,8 @@
 use exonum::crypto::PublicKey;
 
-use service::SERVICE_ID;
-
 transactions! {
     pub VoteTransactions {
-        const SERVICE_ID = SERVICE_ID;
+        const SERVICE_ID = super::SERVICE_ID;
 
         struct TxCreateCandidate {
             pub_key: &PublicKey,
