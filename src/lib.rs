@@ -8,6 +8,7 @@ extern crate serde_derive;
 extern crate byteorder;
 extern crate ring;
 extern crate serde_json;
+extern crate toml;
 #[macro_use]
 extern crate lazy_static;
 extern crate untrusted;
@@ -15,6 +16,7 @@ extern crate untrusted;
 pub mod agreement;
 pub mod api;
 pub mod cipher;
+pub mod cmd;
 pub mod config;
 pub mod contracts;
 pub mod errors;
@@ -69,8 +71,9 @@ impl Service for VoteService {
     }
 }
 
+use cmd::{Finalize, GenerateCommonConfig};
 use exonum::blockchain;
-use exonum::helpers::fabric::{self, keys};
+use exonum::helpers::fabric::{self, keys, Command, CommandExtension, CommandName};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ServiceFactory;
@@ -78,6 +81,16 @@ pub struct ServiceFactory;
 impl fabric::ServiceFactory for ServiceFactory {
     fn service_name(&self) -> &str {
         "voteservice"
+    }
+
+    fn command(&mut self, command: CommandName) -> Option<Box<dyn CommandExtension>> {
+        use exonum::helpers::fabric;
+
+        Some(match command {
+            v if v == fabric::GenerateCommonConfig.name() => Box::new(GenerateCommonConfig),
+            v if v == fabric::Finalize.name() => Box::new(Finalize),
+            _ => return None,
+        })
     }
 
     fn make_service(&mut self, context: &fabric::Context) -> Box<dyn blockchain::Service> {
