@@ -5,6 +5,7 @@ use exonum_testkit::{ApiKind, TestKit, TestKitBuilder};
 use std::borrow::Cow;
 
 use agreement;
+use api::BlockQuery;
 use cipher::{self, Cipher};
 use config::VoteServiceConfig;
 use schema::{
@@ -91,6 +92,23 @@ fn test_get_decrypted_results() {
     assert_eq!(vote.to(), cand.pub_key());
 }
 
+#[test]
+fn test_get_block() {
+    let (mut testkit, _) = init_testkit();
+
+    let (cand_tx, _) = create_candidate(&mut testkit, "Alice", "Some info");
+    let cand = get_candidate(&testkit, cand_tx.pub_key());
+
+    let (voter_tx, _) = create_voter(&mut testkit, "Bob");
+    let voter = get_voter(&testkit, voter_tx.pub_key());
+
+    let (_, height, _) = add_vote(&mut testkit, voter.pub_key(), cand.pub_key());
+
+    let block_height = get_block(&testkit, voter.pub_key());
+
+    assert_eq!(height, block_height);
+}
+
 fn init_testkit() -> (TestKit, agreement::KeyPair) {
     let author_key_pair = agreement::generate_key_pair();
 
@@ -146,12 +164,16 @@ fn get_voter(testkit: &TestKit, pub_key: &PublicKey) -> Voter {
     try_get_voter(testkit, pub_key).expect("Voter not found")
 }
 
-fn add_vote(testkit: &mut TestKit, from: &PublicKey, to: &PublicKey) -> (TxAddVote, SecretKey) {
-    let (_, secret) = crypto::gen_keypair();
-    let tx = TxAddVote::new(from, to, &secret);
-    testkit.create_block_with_transaction(tx.clone());
+fn add_vote(
+    testkit: &mut TestKit,
+    from: &PublicKey,
+    to: &PublicKey,
+) -> (TxAddVote, u64, SecretKey) {
+    let (public, secret) = crypto::gen_keypair();
+    let tx = TxAddVote::new(&public, from, to, &secret);
+    let block = testkit.create_block_with_transaction(tx.clone());
 
-    (tx, secret)
+    (tx, block.height().0, secret)
 }
 
 fn get_vote_result(testkit: &TestKit) -> VoteResult {
@@ -171,6 +193,18 @@ fn get_vote_result_decrypted(testkit: &TestKit) -> Vec<DecryptedCandidateResult>
     let entry: Option<Vec<DecryptedCandidateResult>> = api
         .public(ApiKind::Service("voteservice"))
         .get("v1/results_dec")
+        .unwrap();
+
+    entry.unwrap()
+}
+
+fn get_block(testkit: &TestKit, pub_key: &PublicKey) -> u64 {
+    let api = testkit.api();
+
+    let entry: Option<u64> = api
+        .public(ApiKind::Service("voteservice"))
+        .query(&BlockQuery { pub_key: *pub_key })
+        .get("v1/block")
         .unwrap();
 
     entry.unwrap()
