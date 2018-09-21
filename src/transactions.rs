@@ -16,6 +16,7 @@ transactions! {
         }
 
         struct TxAddVote {
+            pub_key: &PublicKey,
             voter_id: &PublicKey,
             candidate_id: &PublicKey,
         }

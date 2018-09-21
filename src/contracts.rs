@@ -10,8 +10,7 @@ use transactions::{TxAddVote, TxCreateCandidate, TxCreateVoter};
 
 impl Transaction for TxCreateCandidate {
     fn verify(&self) -> bool {
-        // self.verify_signature(self.pub_key())
-        true // FIXME
+        self.verify_signature(self.pub_key())
     }
 
     fn execute(&self, view: &mut Fork) -> ExecutionResult {
@@ -40,8 +39,7 @@ impl Transaction for TxCreateCandidate {
 
 impl Transaction for TxCreateVoter {
     fn verify(&self) -> bool {
-        // self.verify_signature(self.pub_key())
-        true // FIXME
+        self.verify_signature(self.pub_key())
     }
 
     fn execute(&self, view: &mut Fork) -> ExecutionResult {
@@ -59,8 +57,7 @@ impl Transaction for TxCreateVoter {
 
 impl Transaction for TxAddVote {
     fn verify(&self) -> bool {
-        // self.verify_signature(self.pub_key());
-        true // FIXME
+        self.verify_signature(self.pub_key())
     }
 
     fn execute(&self, view: &mut Fork) -> ExecutionResult {
