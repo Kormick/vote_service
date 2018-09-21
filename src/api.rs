@@ -120,16 +120,6 @@ impl VoteServiceApi {
         Ok(dec_results)
     }
 
-    pub fn post_transaction(
-        state: &ServiceApiState,
-        query: VoteTransactions,
-    ) -> api::Result<TransactionResponse> {
-        let transaction: Box<dyn Transaction> = query.into();
-        let tx_hash = transaction.hash();
-        state.sender().send(transaction)?;
-        Ok(TransactionResponse { tx_hash })
-    }
-
     pub fn get_block(state: &ServiceApiState, query: BlockQuery) -> api::Result<u64> {
         let snapshot = state.snapshot();
         let ex_schema = Schema::new(snapshot);
@@ -148,6 +138,16 @@ impl VoteServiceApi {
         }
 
         Err(api::Error::NotFound("Block not found".to_string()))
+    }
+
+    pub fn post_transaction(
+        state: &ServiceApiState,
+        query: VoteTransactions,
+    ) -> api::Result<TransactionResponse> {
+        let transaction: Box<dyn Transaction> = query.into();
+        let tx_hash = transaction.hash();
+        state.sender().send(transaction)?;
+        Ok(TransactionResponse { tx_hash })
     }
 
     pub fn wire(builder: &mut ServiceApiBuilder) {

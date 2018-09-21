@@ -36,7 +36,7 @@ pub fn get_ephemeral() -> EphemeralKeys {
     }
 }
 
-fn generate_key_pair() -> KeyPair {
+pub fn generate_key_pair() -> KeyPair {
     let rng = rand::SystemRandom::new();
     let private_key = agreement::EphemeralPrivateKey::generate(&agreement::X25519, &rng).unwrap();
 
@@ -53,7 +53,7 @@ fn generate_key_pair() -> KeyPair {
     }
 }
 
-fn generate_ephemeral(
+pub fn generate_ephemeral(
     peer_public: &[u8],
     secret_key: agreement::EphemeralPrivateKey,
 ) -> EphemeralKeys {

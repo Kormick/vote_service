@@ -11,6 +11,8 @@ extern crate serde_json;
 extern crate toml;
 #[macro_use]
 extern crate lazy_static;
+#[cfg(test)]
+extern crate exonum_testkit;
 extern crate untrusted;
 
 pub mod agreement;
@@ -21,6 +23,8 @@ pub mod config;
 pub mod contracts;
 pub mod errors;
 pub mod schema;
+#[cfg(test)]
+pub mod tests;
 pub mod transactions;
 
 use api::VoteServiceApi;
@@ -107,23 +111,5 @@ impl fabric::ServiceFactory for ServiceFactory {
         Box::new(VoteService {
             config: service_config,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use exonum::blockchain::Service;
-
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-
-    use service;
-    #[test]
-    fn service_name() {
-        let service = service::VoteService;
-        let name = service.service_name();
-        assert_eq!("voteservice", name);
     }
 }
