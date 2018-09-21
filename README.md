@@ -14,6 +14,7 @@ Clone and build the project:
 ```sh
 git clone https://github.com/Kormick/vote_service
 cd vote_service
+cargo install
 cargo build
 ```
 
