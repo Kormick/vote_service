@@ -2,17 +2,22 @@ use ring::{agreement, error, rand};
 use std::sync::Mutex;
 use untrusted;
 
+/// Agreement.
+
+/// KeyPair struct used to store public and private keys for ephemeral key creation.
 pub struct KeyPair {
     pub secret: agreement::EphemeralPrivateKey,
     pub public: Vec<u8>,
 }
 
+/// EphemeralKeys struct used to store public output key and ephemeral key.
 #[derive(Clone, Debug)]
 pub struct EphemeralKeys {
     pub public_out_key: Vec<u8>,
     pub ephemeral_key: Vec<u8>,
 }
 
+/// Singleton for EphemeralKeys struct.
 lazy_static! {
     static ref EPHEMERAL_KEYS: Mutex<EphemeralKeys> = Mutex::new(EphemeralKeys {
         public_out_key: vec![],
@@ -20,6 +25,7 @@ lazy_static! {
     });
 }
 
+/// Initializes EphemeralKeys singleton for service.
 pub fn init_ephemeral(peer_public: &[u8]) {
     let key_pair = generate_key_pair();
     let ephemeral = generate_ephemeral(peer_public, key_pair.secret);
@@ -28,6 +34,7 @@ pub fn init_ephemeral(peer_public: &[u8]) {
     EPHEMERAL_KEYS.lock().unwrap().ephemeral_key = ephemeral.ephemeral_key;
 }
 
+/// Returns EphemeralKeys struct.
 pub fn get_ephemeral() -> EphemeralKeys {
     let keys = EPHEMERAL_KEYS.lock().unwrap();
     EphemeralKeys {
@@ -36,6 +43,7 @@ pub fn get_ephemeral() -> EphemeralKeys {
     }
 }
 
+/// Generates new KeyPair.
 pub fn generate_key_pair() -> KeyPair {
     let rng = rand::SystemRandom::new();
     let private_key = agreement::EphemeralPrivateKey::generate(&agreement::X25519, &rng).unwrap();
@@ -53,6 +61,7 @@ pub fn generate_key_pair() -> KeyPair {
     }
 }
 
+/// Generates new EphemeralKeys.
 pub fn generate_ephemeral(
     peer_public: &[u8],
     secret_key: agreement::EphemeralPrivateKey,

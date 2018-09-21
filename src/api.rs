@@ -13,30 +13,39 @@ use schema::{
 };
 use transactions::{TxAddVote, VoteTransactions};
 
+/// REST API.
+
+/// Public service API description.
 #[derive(Debug, Clone)]
 pub struct VoteServiceApi;
 
+/// The structure describes the query parameters for the `get_candidate` endpoint.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct CandidateQuery {
     pub pub_key: PublicKey,
 }
 
+/// The structure describes the query parameters for the `get_voter` endpoint.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct VoterQuery {
     pub pub_key: PublicKey,
 }
 
+/// The structure describes the query parameters for the `get_block` endpoint.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct BlockQuery {
     pub pub_key: PublicKey,
 }
 
+/// The structure returned by REST API.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TransactionResponse {
     pub tx_hash: Hash,
 }
 
+/// REST API implementation.
 impl VoteServiceApi {
+    /// Endpoint for getting a candidate.
     pub fn get_candidate(state: &ServiceApiState, query: CandidateQuery) -> api::Result<Candidate> {
         let snapshot = state.snapshot();
         let schema = VoteServiceSchema::new(snapshot);
@@ -45,6 +54,7 @@ impl VoteServiceApi {
             .ok_or_else(|| api::Error::NotFound("Candidate not found".to_string()))
     }
 
+    /// Endpoint for getting all candidates.
     pub fn get_candidates(state: &ServiceApiState, _query: ()) -> api::Result<Vec<Candidate>> {
         let snapshot = state.snapshot();
         let schema = VoteServiceSchema::new(snapshot);
@@ -53,6 +63,7 @@ impl VoteServiceApi {
         Ok(candidates)
     }
 
+    /// Endpoint for getting a voter.
     pub fn get_voter(state: &ServiceApiState, query: VoterQuery) -> api::Result<Voter> {
         let snapshot = state.snapshot();
         let schema = VoteServiceSchema::new(snapshot);
@@ -61,6 +72,7 @@ impl VoteServiceApi {
             .ok_or_else(|| api::Error::NotFound("Voter not found".to_string()))
     }
 
+    /// Endpoint for getting all voters.
     pub fn get_voters(state: &ServiceApiState, _query: ()) -> api::Result<Vec<Voter>> {
         let snapshot = state.snapshot();
         let schema = VoteServiceSchema::new(snapshot);
@@ -69,6 +81,7 @@ impl VoteServiceApi {
         Ok(voters)
     }
 
+    /// Endpoint for getting all encrypted votes.
     pub fn get_votes(state: &ServiceApiState, _query: ()) -> api::Result<Vec<EncryptedVote>> {
         let snapshot = state.snapshot();
         let schema = VoteServiceSchema::new(snapshot);
@@ -77,6 +90,7 @@ impl VoteServiceApi {
         Ok(votes)
     }
 
+    /// Endpoint for getting all encrypted vote results and service public key.
     pub fn get_results(state: &ServiceApiState, _query: ()) -> api::Result<VoteResult> {
         let service_public_key = agreement::get_ephemeral().public_out_key;
         let service_public_key = match PublicKey::from_slice(&service_public_key) {
@@ -93,6 +107,7 @@ impl VoteServiceApi {
         Ok(results)
     }
 
+    /// Endpoint for getting all decrypted vote results.
     pub fn get_results_decrypted(
         state: &ServiceApiState,
         _query: (),
@@ -120,6 +135,7 @@ impl VoteServiceApi {
         Ok(dec_results)
     }
 
+    /// Endpoint for getting a block height.
     pub fn get_block(state: &ServiceApiState, query: BlockQuery) -> api::Result<u64> {
         let snapshot = state.snapshot();
         let ex_schema = Schema::new(snapshot);
@@ -140,6 +156,7 @@ impl VoteServiceApi {
         Err(api::Error::NotFound("Block not found".to_string()))
     }
 
+    /// Common processing for transaction-accepting endpoints.
     pub fn post_transaction(
         state: &ServiceApiState,
         query: VoteTransactions,
@@ -150,6 +167,9 @@ impl VoteServiceApi {
         Ok(TransactionResponse { tx_hash })
     }
 
+    /// 'ServiceApiBuilder' facilitates conversion between transactions/read requests and REST
+    /// endpoints; for example, it parses `POST`ed JSON into the binary transaction
+    /// representation used in Exonum internally.
     pub fn wire(builder: &mut ServiceApiBuilder) {
         builder
             .public_scope()

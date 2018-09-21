@@ -5,6 +5,7 @@ use ring::aead;
 use schema::{EncryptedVote, Vote};
 use std::borrow::Cow;
 
+/// Encrypts vote with service ephemeral key.
 pub fn encrypt_vote(vote: &Vote) -> EncryptedVote {
     let key = agreement::get_ephemeral().ephemeral_key;
     let mut enc = CipherChaChaPoly::default();
@@ -20,6 +21,7 @@ pub fn encrypt_vote(vote: &Vote) -> EncryptedVote {
     enc_vote
 }
 
+/// Decrypts vote with service ephemeral key.
 pub fn decrypt_vote(vote: &EncryptedVote) -> Vote {
     let key = agreement::get_ephemeral().ephemeral_key;
     let mut dec = CipherChaChaPoly::default();
@@ -36,11 +38,12 @@ pub fn decrypt_vote(vote: &EncryptedVote) -> Vote {
 
 pub const TAGLEN: usize = 16;
 
+/// Trait to implement cipher functionality.
 pub trait Cipher: Send + Sync {
-    /// The string that the Noise spec defines for the primitive
+    /// The string that the Noise spec defines for the primitive.
     fn name(&self) -> &'static str;
 
-    /// Set the key
+    /// Set the key.
     fn set(&mut self, key: &[u8]);
 
     /// Encrypt (with associated data) a given plaintext.
@@ -57,6 +60,7 @@ pub trait Cipher: Send + Sync {
     ) -> Result<usize, ()>;
 }
 
+/// CipherChaChaPoly used to store encode/decode keys.
 pub struct CipherChaChaPoly {
     sealing: aead::SealingKey,
     opening: aead::OpeningKey,
@@ -71,16 +75,19 @@ impl Default for CipherChaChaPoly {
     }
 }
 
+/// Implementation of `Cipher` trait for `CipherChaChaPoly`
 impl Cipher for CipherChaChaPoly {
     fn name(&self) -> &'static str {
         "ChaChaPoly"
     }
 
+    /// Set specified key.
     fn set(&mut self, key: &[u8]) {
         self.sealing = aead::SealingKey::new(&aead::CHACHA20_POLY1305, key).unwrap();
         self.opening = aead::OpeningKey::new(&aead::CHACHA20_POLY1305, key).unwrap();
     }
 
+    /// Encrypt data.
     fn encrypt(&self, nonce: u64, authtext: &[u8], plaintext: &[u8], out: &mut [u8]) -> usize {
         let mut nonce_bytes = [0u8; 12];
         LittleEndian::write_u64(&mut nonce_bytes[4..], nonce);
@@ -97,6 +104,7 @@ impl Cipher for CipherChaChaPoly {
         plaintext.len() + TAGLEN
     }
 
+    /// Decrypt data.
     fn decrypt(
         &self,
         nonce: u64,

@@ -41,8 +41,10 @@ use exonum::{
 use serde_json::to_value;
 use transactions::VoteTransactions;
 
+/// Service ID for the `Service` trait.
 pub const SERVICE_ID: u16 = 42;
 
+/// Exonum `Service` implementation.
 #[derive(Debug, Default)]
 pub struct VoteService {
     config: VoteServiceConfig,
@@ -79,6 +81,7 @@ use cmd::{Finalize, GenerateCommonConfig};
 use exonum::blockchain;
 use exonum::helpers::fabric::{self, keys, Command, CommandExtension, CommandName};
 
+/// A configuration service creator for the `NodeBuilder`
 #[derive(Debug, Clone, Copy)]
 pub struct ServiceFactory;
 
@@ -104,6 +107,7 @@ impl fabric::ServiceFactory for ServiceFactory {
                 .try_into()
                 .unwrap();
 
+        // Initializing agreement module
         let author_key = service_config.author_public_key.unwrap();
         let author_key = author_key.as_ref();
         agreement::init_ephemeral(author_key);

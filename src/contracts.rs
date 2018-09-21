@@ -3,16 +3,25 @@ use errors::Error;
 use exonum::{
     blockchain::{ExecutionResult, Transaction},
     crypto::CryptoHash,
+    messages::Message,
     storage::Fork,
 };
 use schema::{Candidate, CandidateResult, Vote, VoteServiceSchema, Voter};
 use transactions::{TxAddVote, TxCreateCandidate, TxCreateVoter};
 
+/// Contracts.
+
 impl Transaction for TxCreateCandidate {
+    /// Verifies integrity of the transaction by checking the transaction
+    /// signature.
     fn verify(&self) -> bool {
         self.verify_signature(self.pub_key())
     }
 
+    /// If candidate with specified public key is not created, then creates
+    /// a new candidate with the specified public key, name and info,
+    /// and a new candidate result struct.
+    /// Otherwise, does nothing.
     fn execute(&self, view: &mut Fork) -> ExecutionResult {
         let mut schema = VoteServiceSchema::new(view);
         if schema.candidate(self.pub_key()).is_none() {
@@ -38,10 +47,15 @@ impl Transaction for TxCreateCandidate {
 }
 
 impl Transaction for TxCreateVoter {
+    /// Verifies integrity of the transaction by checking the transaction
+    /// signature.
     fn verify(&self) -> bool {
         self.verify_signature(self.pub_key())
     }
 
+    /// If voter with specified public key is not created, then creates
+    /// a new voter with the specified public key and name.
+    /// Otherwise, does nothing.
     fn execute(&self, view: &mut Fork) -> ExecutionResult {
         let mut schema = VoteServiceSchema::new(view);
         if schema.voter(self.pub_key()).is_none() {
@@ -56,10 +70,16 @@ impl Transaction for TxCreateVoter {
 }
 
 impl Transaction for TxAddVote {
+    /// Verifies integrity of the transaction by checking the transaction
+    /// signature.
     fn verify(&self) -> bool {
         self.verify_signature(self.pub_key())
     }
 
+    /// If candidate and voter with specified public keys exist, then creates
+    /// a new encrypted vote with specified voter and candidate public keys.
+    /// Also updates vote results.
+    /// Otherwise, does nothing.
     fn execute(&self, view: &mut Fork) -> ExecutionResult {
         let mut schema = VoteServiceSchema::new(view);
 

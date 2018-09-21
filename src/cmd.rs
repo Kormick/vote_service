@@ -7,8 +7,11 @@ use config::VoteServiceConfig;
 use exonum::helpers::fabric::{keys, Argument, CommandExtension, Context};
 use exonum::node::NodeConfig;
 
+/// Configuration commands.
+
 pub struct GenerateCommonConfig;
 
+/// Implementation of common config generation for service.
 impl CommandExtension for GenerateCommonConfig {
     fn args(&self) -> Vec<Argument> {
         vec![Argument::new_named(
@@ -44,6 +47,7 @@ impl CommandExtension for GenerateCommonConfig {
 
 pub struct Finalize;
 
+/// Implementation of finalization for config generation.
 impl CommandExtension for Finalize {
     fn args(&self) -> Vec<Argument> {
         vec![]
